@@ -1,18 +1,9 @@
-/*
- * Permission is hereby granted, free of charge, to anyone
- * obtaining a copy of this document and accompanying files,
- * to do whatever they want with them without any restriction,
- * including, but not limited to, copying, modification and redistribution.
- * NO WARRANTY OF ANY KIND IS PROVIDED.
- *
- * Example that shows how to periodically read a P1 message from a
- * serial port and automatically print the result.
-*/
-
 #include "dsmr.h"
 #include <ESP8266WiFi.h> 
-
+#include "WiFiManager.h"          //https://github.com/tzapu/WiFiManager which was modded to support upload
 #include <WiFiUdp.h>
+#include "FS.h"
+
 /**
  * Define the data we're interested in, as well as the datastructure to
  * hold the parsed data. This list shows all supported fields, remove
@@ -75,44 +66,12 @@ using MyData = ParsedData<
 //  /* TimestampedFixedValue */ slave_delivered
 >;
 
-/**
- * This illustrates looping over all parsed fields using the
- * ParsedData::applyEach method.
- *
- * When passed an instance of this Printer object, applyEach will loop
- * over each field and call Printer::apply, passing a reference to each
- * field in turn. This passes the actual field object, not the field
- * value, so each call to Printer::apply will have a differently typed
- * parameter.
- *
- * For this reason, Printer::apply is a template, resulting in one
- * distinct apply method for each field used. This allows looking up
- * things like Item::name, which is different for every field type,
- * without having to resort to virtual method calls (which result in
- * extra storage usage). The tradeoff is here that there is more code
- * generated (but due to compiler inlining, it's pretty much the same as
- * if you just manually printed all field names and values (with no
- * cost at all if you don't use the Printer).
- */
-struct Printer {
-  template<typename Item>
-  void apply(Item &i) {
-    if (i.present()) {
-      Serial.print(Item::name);
-      Serial.print(F(": "));
-      Serial.print(i.val());
-      Serial.print(Item::unit());
-      Serial.println();
-    }
-  }
-};
-
-// Set up to read from the second serial port, and use D2 as the request
-// pin. On boards with only one (USB) serial port, you can also use
-// SoftwareSerial.
-P1Reader reader(&Serial, D2);
-
-unsigned long last;
+//#define PIN_TRANSISTOR_BASE 0
+#define PIN_TX 1
+//#define PIN_BUTTON 2
+#define PIN_RX 3
+#define RESET_SSID "DSMR Relay"
+#define RESET_PASSWORD "goudfish"
 
 struct __attribute__((packed)) UsageData {
   uint8_t timestamp_year;
@@ -132,37 +91,107 @@ struct __attribute__((packed)) UsageData {
 };
 static_assert(sizeof(UsageData) == 50, "UsageData size mismatch");
 
-const char* ssid = "ssid";
-const char* password = "pass";
+// Set up to read from the second serial port, and use D2 as the request
+// pin. On boards with only one (USB) serial port, you can also use
+// SoftwareSerial.
+P1Reader reader(&Serial, PIN_TX);
+WiFiServer server(8000);
+WiFiClient client;
+unsigned long last;
 
 const char* receiverIP = "192.168.123.204";
-//const char* receiverIP2 = "192.168.123.78";
 const uint16_t receiverPort = 37678;
 WiFiUDP udp;
 
-void setup() {
-  Serial.printf("Connecting to %s ", ssid);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println(" connected");
-  
-  Serial.begin(115200);
-  Serial1.begin(115200);
-  #ifdef VCC_ENABLE
-  // This is needed on Pinoccio Scout boards to enable the 3V3 pin.
-  pinMode(VCC_ENABLE, OUTPUT);
-  digitalWrite(VCC_ENABLE, HIGH);
-  #endif
+void ledToggle() {
+  digitalWrite(PIN_TX, !digitalRead(PIN_TX));
+}
 
-  Serial.println("Hello!");
-  Serial.println("Hello!");
+void setup() {
+//  pinMode(PIN_TRANSISTOR_BASE, INPUT);
+  //pinMode(PIN_BUTTON, INPUT);
+  
+  // RTS and LED signal
+  pinMode(PIN_TX, OUTPUT);
+  digitalWrite(LOW, PIN_TX);
+
+  // If we go to reset, do a blocking portal
+  pinMode(2, INPUT);  
+  pinMode(0, OUTPUT);
+  digitalWrite(0, 0);
+  bool resetPressed = !digitalRead(2);
+  pinMode(0, INPUT);
+  
+  pinMode(PIN_TX, OUTPUT);
+
+  if(resetPressed) {
+    SPIFFS.format();
+    WiFiManager wifiManager;
+    wifiManager.startConfigPortal(RESET_SSID, RESET_PASSWORD);
+  }
+
+  if(!SPIFFS.begin()) {
+    SPIFFS.format();
+    SPIFFS.begin();
+  }
+  
+  WiFi.mode(WIFI_STA);
+  //Blink while we are connecting
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    ledToggle();
+  }
+ 
+  Serial.begin(115200);
+  pinMode(PIN_TX, OUTPUT);
   // start a read right away
   reader.enable(true);
   last = millis();
+}
+
+
+int readBlocking(WiFiClient& wifiClient, uint8_t* buf, size_t size, int16_t timeout) {
+  uint16_t timeWaited = 0;
+  size_t totalBytesRead = 0;
+  bool first = true;
+
+  while(totalBytesRead < size && timeWaited < timeout) {
+    if(!first) {
+      delay(1); 
+      timeWaited++;
+    }
+    first = false;
+    
+    int bytesRead = wifiClient.read(buf + totalBytesRead, size - totalBytesRead);
+    if(bytesRead > 0) {
+      totalBytesRead += bytesRead;
+    }
+  }
+  return totalBytesRead;
+}
+
+
+void handleSetReceiver() {
+  uint8_t data[6];
+  readBlocking(client, data, 6, 1000);
+  auto file = SPIFFS.open("/receiver", "w+");
+  file.write(data, 6);
+  file.close();
+
+  client.write('k');
+}
+
+bool getReceiver(IPAddress& ip, uint16_t& port) {
+  File file = SPIFFS.open("/receiver", "r");
+  if(!file) {
+    return false;
+  }
+  char bytes[6];
+  file.readBytes(bytes, 6);
+  ip = IPAddress(*((uint32_t*)bytes));
+  port = *((uint16_t*)(bytes + 4));
+  file.close();
+  return true;
 }
 
 void convert_timestamp(String& timestamp, uint8_t* out_year, uint32_t* out_rest) {
@@ -179,48 +208,79 @@ void convert_timestamp(String& timestamp, uint8_t* out_year, uint32_t* out_rest)
 }
 
 void loop () {
-  // Allow the reader to check the serial buffer regularly
-  reader.loop();
+  // Blink LED when connecting
+  /*
+  if( WiFi.status() != WL_CONNECTED) {
+    ledToggle();
+    delay(75);
+  } else {
+    // Allow the reader to check the serial buffer regularly
+    reader.loop();
 
-  // Every 10 sec, fire off a one-off reading
-  unsigned long now = millis();
-  if (now - last > 10000) {
-    reader.enable(true);
-    last = now;
-  }
-
-  if (reader.available()) {
-    MyData data;
-    String err;
-    if (reader.parse(&data, &err)) {
-      // Parse succesful, print result
-      data.applyEach(Printer());
-      UsageData ud;
-      convert_timestamp(data.timestamp, &ud.timestamp_year, &ud.timestamp_rest);
-      ud.power_delivered = data.power_delivered.int_val();
-      ud.power_returned = data.power_returned.int_val();
-      ud.energy_delivered_tariff1 = data.energy_delivered_tariff1.int_val();
-      ud.energy_delivered_tariff2 = data.energy_delivered_tariff2.int_val();
-      ud.energy_returned_tariff1 = data.energy_returned_tariff1.int_val();
-      ud.energy_returned_tariff2 = data.energy_returned_tariff2.int_val();
-      ud.power_delivered_l1 = data.power_delivered_l1.int_val();
-      ud.power_delivered_l2 = data.power_delivered_l2.int_val();
-      ud.power_delivered_l3 = data.power_delivered_l3.int_val();
-      convert_timestamp(data.gas_delivered.timestamp, &ud.gas_timestamp_year, &ud.gas_timestamp_rest);
-      ud.gas_delivered = data.gas_delivered.int_val();
-      udp.beginPacket(receiverIP, receiverPort);
-      udp.write((uint8_t*) &ud, sizeof(UsageData));
-      udp.endPacket();
-      /*
-      udp.beginPacket(receiverIP2, receiverPort);
-      udp.write((uint8_t*) &ud, sizeof(UsageData));
-      udp.endPacket();
-*/
-
-      
-    } else {
-      // Parser error, print error
-      Serial.println(err);
+    //check if there are any new clients
+    if (server.hasClient()){
+        //free/disclient client
+        if (!client || !client.connected()){
+          if(client) {
+            client.stop();
+          }
+          client = server.available();
+      }
+      //no free/disclient spot so reject
+      WiFiClient serverClient = server.available();
+      serverClient.stop();
     }
-  }
+  
+    //check wifi client for data
+    if (client && client.connected() && client.available()){
+      handleSetReceiver();
+      client.stop();
+    }
+  */
+    // Every 10 sec, fire off a one-off reading
+    unsigned long now = millis();
+    if (now - last > 10000) {
+      reader.enable(true);
+      last = now;
+    }
+  
+    if (reader.available()) {
+      MyData data;
+      String err;
+      if (reader.parse(&data, &err)) {
+        UsageData ud;
+        convert_timestamp(data.timestamp, &ud.timestamp_year, &ud.timestamp_rest);
+        ud.power_delivered = data.power_delivered.int_val();
+        ud.power_returned = data.power_returned.int_val();
+        ud.energy_delivered_tariff1 = data.energy_delivered_tariff1.int_val();
+        ud.energy_delivered_tariff2 = data.energy_delivered_tariff2.int_val();
+        ud.energy_returned_tariff1 = data.energy_returned_tariff1.int_val();
+        ud.energy_returned_tariff2 = data.energy_returned_tariff2.int_val();
+        ud.power_delivered_l1 = data.power_delivered_l1.int_val();
+        ud.power_delivered_l2 = data.power_delivered_l2.int_val();
+        ud.power_delivered_l3 = data.power_delivered_l3.int_val();
+        convert_timestamp(data.gas_delivered.timestamp, &ud.gas_timestamp_year, &ud.gas_timestamp_rest);
+        ud.gas_delivered = data.gas_delivered.int_val();
+
+       /* IPAddress receiverIP;
+        uint16_t receiverPort;
+    
+        if(getReceiver(receiverIP, receiverPort)) {*/
+            udp.beginPacket(receiverIP, receiverPort);
+            udp.write((uint8_t*) &ud, sizeof(UsageData));
+            udp.endPacket();
+        //}
+        /*
+        udp.beginPacket(receiverIP2, receiverPort);
+        udp.write((uint8_t*) &ud, sizeof(UsageData));
+        udp.endPacket();
+  */
+  
+        
+      } else {
+        // Parser error, print error
+        Serial.println(err);
+      }
+    }
+  //}
 }
