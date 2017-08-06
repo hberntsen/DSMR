@@ -1,0 +1,3 @@
+[submodule "dsmr_host/WifiManager"]
+	path = dsmr_host/WifiManager
+	url = https://github.com/hberntsen/WiFiManager
