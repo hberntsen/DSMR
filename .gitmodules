@@ -1,3 +1,6 @@
 [submodule "dsmr_host/WifiManager"]
 	path = dsmr_host/WifiManager
 	url = https://github.com/hberntsen/WiFiManager
+[submodule "docker/grafana-docker"]
+	path = docker/grafana-docker
+	url = https://github.com/grafana/grafana-docker

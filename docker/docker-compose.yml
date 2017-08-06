@@ -1,0 +1,37 @@
+version: '3'
+services:
+    dsmr-esp-post:
+        build: dsmr-esp-post-docker
+        restart: always
+        links: 
+            - influxdb
+        networks:
+            - db
+        ports:
+            - "37678:37678/udp"
+        environment:
+            - TZ=Europe/Amsterdam
+              #            - RUST_BACKTRACE=1
+    influxdb:
+        image: influxdb:alpine
+        restart: always
+        expose:
+            - 8088
+        volumes:
+            - ./influxdb-data:/var/lib/influxdb
+            - ./influxdb.conf:/etc/influxdb/influxdb.conf:ro
+        command:
+            /usr/bin/influxd -config /etc/influxdb/influxdb.conf
+    grafana:
+        restart: always
+        build: 
+            context: ./grafana-docker
+            args:
+                DOWNLOAD_URL: https://s3-us-west-2.amazonaws.com/grafana-releases/release/grafana_4.4.2_amd64.deb
+        expose:
+            - 3000
+        links:
+            - influxdb
+        volumes:
+            - ./grafana-data:/var/lib/grafana
+            - ./grafana.ini:/etc/grafana/grafana.ini
