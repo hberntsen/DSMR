@@ -66,9 +66,7 @@ using MyData = ParsedData<
 //  /* TimestampedFixedValue */ slave_delivered
 >;
 
-//#define PIN_TRANSISTOR_BASE 0
 #define PIN_TX 1
-//#define PIN_BUTTON 2
 #define PIN_RX 3
 #define RESET_SSID "DSMR Relay"
 #define RESET_PASSWORD "goudfish"
@@ -98,9 +96,6 @@ P1Reader reader(&Serial, PIN_TX);
 WiFiServer server(8000);
 WiFiClient client;
 unsigned long last;
-
-const char* receiverIP = "192.168.123.204";
-const uint16_t receiverPort = 37678;
 WiFiUDP udp;
 
 void ledToggle() {
@@ -108,13 +103,7 @@ void ledToggle() {
 }
 
 void setup() {
-//  pinMode(PIN_TRANSISTOR_BASE, INPUT);
-  //pinMode(PIN_BUTTON, INPUT);
-  
-  // RTS and LED signal
-  pinMode(PIN_TX, OUTPUT);
-  digitalWrite(LOW, PIN_TX);
-
+  WiFi.hostname(RESET_SSID);
   // If we go to reset, do a blocking portal
   pinMode(2, INPUT);  
   pinMode(0, OUTPUT);
@@ -122,8 +111,6 @@ void setup() {
   bool resetPressed = !digitalRead(2);
   pinMode(0, INPUT);
   
-  pinMode(PIN_TX, OUTPUT);
-
   if(resetPressed) {
     SPIFFS.format();
     WiFiManager wifiManager;
@@ -144,6 +131,9 @@ void setup() {
  
   Serial.begin(115200);
   pinMode(PIN_TX, OUTPUT);
+
+  server.begin();
+  server.setNoDelay(true);
   // start a read right away
   reader.enable(true);
   last = millis();
@@ -209,14 +199,10 @@ void convert_timestamp(String& timestamp, uint8_t* out_year, uint32_t* out_rest)
 
 void loop () {
   // Blink LED when connecting
-  /*
   if( WiFi.status() != WL_CONNECTED) {
     ledToggle();
     delay(75);
   } else {
-    // Allow the reader to check the serial buffer regularly
-    reader.loop();
-
     //check if there are any new clients
     if (server.hasClient()){
         //free/disclient client
@@ -236,7 +222,10 @@ void loop () {
       handleSetReceiver();
       client.stop();
     }
-  */
+
+    // Allow the reader to check the serial buffer regularly
+    reader.loop();
+    
     // Every 10 sec, fire off a one-off reading
     unsigned long now = millis();
     if (now - last > 10000) {
@@ -262,14 +251,14 @@ void loop () {
         convert_timestamp(data.gas_delivered.timestamp, &ud.gas_timestamp_year, &ud.gas_timestamp_rest);
         ud.gas_delivered = data.gas_delivered.int_val();
 
-       /* IPAddress receiverIP;
+        IPAddress receiverIP;
         uint16_t receiverPort;
     
-        if(getReceiver(receiverIP, receiverPort)) {*/
+        if(getReceiver(receiverIP, receiverPort)) {
             udp.beginPacket(receiverIP, receiverPort);
             udp.write((uint8_t*) &ud, sizeof(UsageData));
             udp.endPacket();
-        //}
+        }
         /*
         udp.beginPacket(receiverIP2, receiverPort);
         udp.write((uint8_t*) &ud, sizeof(UsageData));
@@ -279,8 +268,8 @@ void loop () {
         
       } else {
         // Parser error, print error
-        Serial.println(err);
+        //Serial.println(err);
       }
     }
-  //}
+  }
 }
