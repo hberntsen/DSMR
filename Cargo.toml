@@ -6,6 +6,5 @@ authors = ["Harm Berntsen <git@harmberntsen.nl>"]
 [dependencies]
 time = "0.1"
 hyper = "0.11"
-serde_json = "1.0"
 futures = "0.1.14"
 tokio-core = "0.1"

@@ -1,8 +1,5 @@
 extern crate time;
-#[macro_use]
-extern crate serde_json;
 
-#[macro_use]
 extern crate hyper;
 extern crate futures;
 extern crate tokio_core;
@@ -13,9 +10,7 @@ use std::net::UdpSocket;
 use std::mem;
 use hyper::{Method, Request};
 use hyper::header::{ContentLength, ContentType};
-header! { (XAuthKey, "X-AUTHKEY") => [String] }
 use std::str;
-use std::env;
 
 #[derive(Debug)]
 #[repr(C,packed)]
@@ -56,20 +51,10 @@ fn to_tm(year: u8, rest: u32) -> Result<time::Tm, time::ParseError> {
     Ok(time)
 }
 
-fn to_formatted_time(year: u8, rest: u32) -> Result<std::string::String, time::ParseError> {
-    let tm = to_tm(year, rest)?;
-    time::strftime("%Y-%m-%dT%H:%M:%S", &tm)
-}
-
-fn format_u32(input: u32) -> std::string::String {
-    format!("{}.{}", input / 1000, input % 1000)
-}
-
 fn serve() -> Result<(),std::io::Error> {
     let socket = UdpSocket::bind("0.0.0.0:37678")?;
     let mut core = Core::new().expect("Could not create core");
     let client = Client::new(&core.handle());
-    let authkey = env::var("AUTH_KEY").expect("Please set the AUTH_KEY environment variable");
 
     loop {
         // read from the socket
@@ -83,7 +68,6 @@ fn serve() -> Result<(),std::io::Error> {
        let ud: UsageData = unsafe { mem::transmute::<[u8; USAGEDATA_SIZE], UsageData>(buf)};
        // influxdb
        {
-
             {
                 let energy_timestamp = to_tm(ud.timestamp_year, ud.timestamp_rest);
                 if let Err(_) = energy_timestamp {
@@ -112,7 +96,7 @@ fn serve() -> Result<(),std::io::Error> {
                         continue;
                 }
                 let gas_timestamp = gas_timestamp.unwrap();
-            
+
                 let data = format!( "gas delivered={} {}", ud.gas_delivered, gas_timestamp.to_utc().to_timespec().sec);
                 let uri = "http://influxdb:8086/write?db=dsmr&precision=s".parse().unwrap();
                 let mime: Mime = "application/octet-stream".parse().unwrap();
@@ -128,53 +112,5 @@ fn serve() -> Result<(),std::io::Error> {
                 }
             }
        }
-
-       // dsmr-reader
-       let formatted_timestamp = to_formatted_time(ud.timestamp_year, ud.timestamp_rest);
-       if let Err(_) = formatted_timestamp {
-            continue;
-       }
-       let formatted_gas_timestamp = to_formatted_time(ud.gas_timestamp_year, ud.gas_timestamp_rest);
-       if let Err(_) = formatted_gas_timestamp {
-            continue;
-       }
-
-       let formatted_timestamp = formatted_timestamp.unwrap();
-       let formatted_gas_timestamp = formatted_gas_timestamp.unwrap();
-       let json = json!({
-            "timestamp": formatted_timestamp,
-            "electricity_currently_delivered": format_u32(ud.power_delivered),
-            "electricity_currently_returned": format_u32(ud.power_returned),
-            "electricity_delivered_1": format_u32(ud.energy_delivered_tariff1),
-            "electricity_delivered_2": format_u32(ud.energy_delivered_tariff2),
-            "electricity_returned_1": format_u32(ud.energy_returned_tariff1),
-            "electricity_returned_2": format_u32(ud.energy_returned_tariff2),
-            "phase_currently_delivered_l1": format_u32(ud.power_delivered_l1),
-            "phase_currently_delivered_l2": format_u32(ud.power_delivered_l2),
-            "phase_currently_delivered_l3": format_u32(ud.power_delivered_l3),
-            "extra_device_timestamp": formatted_gas_timestamp,
-            "extra_device_delivered": format_u32(ud.gas_delivered),
-       }).to_string();
-
-        let uri = "http://dsmr-reader/api/v2/datalogger/dsmrreading".parse().unwrap();
-        let mut req = Request::new(Method::Post, uri);
-        req.headers_mut().set(ContentType::json());
-        req.headers_mut().set(ContentLength(json.len() as u64));
-        req.headers_mut().set(XAuthKey(authkey.clone()));
-        req.set_body(json);
-
-        let post = client.request(req);
-        let res = core.run(post).expect("core run");
-        if res.status() != hyper::StatusCode::Created {
-            println!("POST dsmr-reader: {}", res.status());
-        }
     }
 }
-
-//fn post(json: std::string::String) -> Result<(), hyper::error::UriError> {
-
-
-    //println!("POST");
-
-    //Ok(())
-//}
