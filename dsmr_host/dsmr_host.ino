@@ -48,10 +48,10 @@ using MyData = ParsedData<
   /* FixedValue */ power_returned_l1,
   /* FixedValue */ power_returned_l2,
   /* FixedValue */ power_returned_l3,
-  /* uint16_t */ gas_device_type,
-  /* String */ gas_equipment_id,
+  /* uint16_t */ gas2_device_type,
+  /* String */ gas2_equipment_id,
 //  /* uint8_t */ gas_valve_position,
-  /* TimestampedFixedValue */ gas_delivered
+  /* TimestampedFixedValue */ gas2_delivered
 //  /* uint16_t */ thermal_device_type,
 //  /* String */ thermal_equipment_id,
 //  /* uint8_t */ thermal_valve_position,
@@ -248,8 +248,8 @@ void loop () {
         ud.power_delivered_l1 = data.power_delivered_l1.int_val();
         ud.power_delivered_l2 = data.power_delivered_l2.int_val();
         ud.power_delivered_l3 = data.power_delivered_l3.int_val();
-        convert_timestamp(data.gas_delivered.timestamp, &ud.gas_timestamp_year, &ud.gas_timestamp_rest);
-        ud.gas_delivered = data.gas_delivered.int_val();
+        convert_timestamp(data.gas2_delivered.timestamp, &ud.gas_timestamp_year, &ud.gas_timestamp_rest);
+        ud.gas_delivered = data.gas2_delivered.int_val();
 
         IPAddress receiverIP;
         uint16_t receiverPort;
