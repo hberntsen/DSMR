@@ -5,6 +5,9 @@ authors = ["Harm Berntsen <git@harmberntsen.nl>"]
 
 [dependencies]
 time = "0.1"
-hyper = "0.12"
+hyper = {version = "0.12", features=[]}
 futures = "0.1"
-tokio-core = "0.1"
+tokio = "0.1"
+
+[profile.release]
+lto = true
