@@ -1,13 +1,3 @@
-[root]
-name = "dsmr-esp-post"
-version = "0.1.0"
-dependencies = [
- "futures 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "hyper 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.38 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-core 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
 [[package]]
 name = "base64"
 version = "0.6.0"
@@ -35,6 +25,16 @@ dependencies = [
 name = "cfg-if"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "dsmr-esp-post"
+version = "0.1.0"
+dependencies = [
+ "futures 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hyper 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.38 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-core 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "futures"

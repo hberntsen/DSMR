@@ -10,9 +10,7 @@ use std::net::UdpSocket;
 use std::mem;
 use hyper::{Method, Request};
 use hyper::header::{ContentLength, ContentType};
-use std::str;
 
-#[derive(Debug)]
 #[repr(C,packed)]
 struct UsageData {
   timestamp_year: u8,
@@ -70,8 +68,8 @@ fn serve() -> Result<(),std::io::Error> {
        {
             {
                 let energy_timestamp = to_tm(ud.timestamp_year, ud.timestamp_rest);
-                if let Err(_) = energy_timestamp {
-                        continue;
+                if energy_timestamp.is_err() {
+                    continue;
                 }
                 let energy_timestamp = energy_timestamp.unwrap();
 
@@ -92,8 +90,8 @@ fn serve() -> Result<(),std::io::Error> {
             }
             {
                 let gas_timestamp = to_tm(ud.gas_timestamp_year, ud.gas_timestamp_rest);
-                if let Err(_) = gas_timestamp {
-                        continue;
+                if gas_timestamp.is_err() {
+                    continue;
                 }
                 let gas_timestamp = gas_timestamp.unwrap();
 
