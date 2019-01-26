@@ -4,12 +4,11 @@ extern crate hyper;
 extern crate futures;
 extern crate tokio_core;
 use hyper::Client;
-use hyper::mime::{Mime};
+use hyper::http::header;
 use tokio_core::reactor::Core;
 use std::net::UdpSocket;
 use std::mem;
-use hyper::{Method, Request};
-use hyper::header::{ContentLength, ContentType};
+use hyper::Request;
 
 #[repr(C,packed)]
 struct UsageData {
@@ -52,7 +51,7 @@ fn to_tm(year: u8, rest: u32) -> Result<time::Tm, time::ParseError> {
 fn serve() -> Result<(),std::io::Error> {
     let socket = UdpSocket::bind("0.0.0.0:37678")?;
     let mut core = Core::new().expect("Could not create core");
-    let client = Client::new(&core.handle());
+    let client = Client::new();
 
     loop {
         // read from the socket
@@ -74,19 +73,17 @@ fn serve() -> Result<(),std::io::Error> {
                 let energy_timestamp = energy_timestamp.unwrap();
 
                 let data = format!( "power currently_delivered={},delivered_1={},delivered_2={},currently_phase_l1={},currently_phase_l2={},currently_phase_l3={} {}", ud.power_delivered, ud.energy_delivered_tariff1, ud.energy_delivered_tariff2, ud.power_delivered_l1, ud.power_delivered_l2, ud.power_delivered_l3, energy_timestamp.to_utc().to_timespec().sec);
-                let uri = "http://influxdb:8086/write?db=dsmr&precision=s".parse().unwrap();
-                let mime: Mime = "application/octet-stream".parse().unwrap();
-                let mut req = Request::new(Method::Post, uri);
-                req.headers_mut().set(ContentType(mime));
-                req.headers_mut().set(ContentLength(data.len() as u64));
-                req.set_body(data);
+                let mut req = Request::post("http://influxdb:8086/write?db=dsmr&precision=s")
+                    .header(header::CONTENT_TYPE, "application/octet-stream")
+                    .header(header::CONTENT_LENGTH, data.len())
+                    .body(data.into())
+                    .unwrap();
 
                 let post = client.request(req);
-                let res = core.run(post).expect("core run");
-                if res.status() != hyper::StatusCode::NoContent {
+                let res = core.run(post).expect("core post power");
+                if res.status() != hyper::StatusCode::NO_CONTENT {
                     println!("POST power: {}", res.status());
                 }
-
             }
             {
                 let gas_timestamp = to_tm(ud.gas_timestamp_year, ud.gas_timestamp_rest);
@@ -96,16 +93,16 @@ fn serve() -> Result<(),std::io::Error> {
                 let gas_timestamp = gas_timestamp.unwrap();
 
                 let data = format!( "gas delivered={} {}", ud.gas_delivered, gas_timestamp.to_utc().to_timespec().sec);
-                let uri = "http://influxdb:8086/write?db=dsmr&precision=s".parse().unwrap();
-                let mime: Mime = "application/octet-stream".parse().unwrap();
-                let mut req = Request::new(Method::Post, uri);
-                req.headers_mut().set(ContentType(mime));
-                req.headers_mut().set(ContentLength(data.len() as u64));
-                req.set_body(data);
+
+                let mut req = Request::post("http://influxdb:8086/write?db=dsmr&precision=s")
+                    .header(header::CONTENT_TYPE, "application/octet-stream")
+                    .header(header::CONTENT_LENGTH, data.len())
+                    .body(data.into())
+                    .unwrap();
 
                 let post = client.request(req);
-                let res = core.run(post).expect("core run");
-                if res.status() != hyper::StatusCode::NoContent {
+                let res = core.run(post).expect("core post gas");
+                if res.status() != hyper::StatusCode::NO_CONTENT {
                     println!("POST gas: {}", res.status());
                 }
             }
