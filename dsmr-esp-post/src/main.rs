@@ -1,6 +1,8 @@
 extern crate time;
 extern crate tokio;
 extern crate hyper;
+mod meter;
+
 #[macro_use] extern crate futures;
 use hyper::http::header;
 use tokio::net::UdpSocket;
@@ -9,26 +11,7 @@ use hyper::Request;
 use futures::prelude::*;
 use std::io;
 use std::net::{SocketAddr, Ipv4Addr};
-
-#[repr(C,packed)]
-struct UsageData {
-  timestamp_year: u8,
-  timestamp_rest: u32,
-  power_delivered: u32,
-  power_returned: u32,
-  energy_delivered_tariff1: u32,
-  energy_delivered_tariff2: u32,
-  energy_returned_tariff1: u32,
-  energy_returned_tariff2: u32,
-  power_delivered_l1: u32,
-  power_delivered_l2: u32,
-  power_delivered_l3: u32,
-  gas_timestamp_year: u8,
-  gas_timestamp_rest: u32,
-  gas_delivered: u32,
-}
-
-const USAGEDATA_SIZE: usize = 50;
+use meter::{UsageData, USAGEDATA_SIZE};
 
 type HC = hyper::Client<hyper::client::HttpConnector, hyper::Body>;
 
@@ -42,19 +25,6 @@ fn main() -> Result<(), io::Error> {
     Ok(())
 }
 
-fn to_tm(year: u8, rest: u32) -> Result<time::Tm, time::ParseError> {
-    let mut rest_str = rest.to_string();
-    if rest_str.len() < 10 {
-        rest_str = format!("0{}", rest_str);
-    }
-    let time_str = format!("20{}{}", year.to_string(), rest_str);
-    let mut time = time::strptime(&time_str, "%Y%m%d%H%M%S")?;
-    // this may generate a few datapoints in the wrong timezone but we can live
-    // with that
-    time.tm_utcoff = time::now().tm_utcoff;
-    time.tm_isdst = time::now().tm_isdst;
-    Ok(time)
-}
 
 fn influx_post(data: String) -> Request<hyper::Body> {
     Request::post("http://influxdb:8086/write?db=dsmr&precision=s")
@@ -111,14 +81,14 @@ impl Future for Server {
             }
 
             let ud: UsageData = unsafe { mem::transmute::<[u8; USAGEDATA_SIZE], UsageData>(buf)};
-            let energy_timestamp = match to_tm(ud.timestamp_year, ud.timestamp_rest) {
+            let energy_timestamp = match ud.energy_timestamp() {
                 Err(e) => {
                     eprintln!("Could not read energy timestamp: {:?}", e);
                     continue;
                 },
                 Ok(x) => x
             };
-            let gas_timestamp = match to_tm(ud.gas_timestamp_year, ud.gas_timestamp_rest) {
+            let gas_timestamp = match ud.gas_timestamp() {
                 Err(e) => {
                     eprintln!("Could not read gas timestamp: {:?}", e);
                     continue;
