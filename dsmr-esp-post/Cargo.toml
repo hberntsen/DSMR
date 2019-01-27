@@ -9,5 +9,11 @@ hyper = {version = "0.12", features=[]}
 futures = "0.1"
 tokio = "0.1"
 
+[dependencies.paho-mqtt]
+git = "https://github.com/eclipse/paho.mqtt.rust"
+rev = "9d8b9ca"
+default-features = false
+features = ["bundled"]
+
 [profile.release]
 lto = true
