@@ -101,6 +101,7 @@ WiFiUDP udp;
 //settings
 static IPAddress receiverIP;
 static uint16_t receiverPort = 0;
+static uint16_t interval = 10000;
 
 void ledToggle() {
   digitalWrite(PIN_TX, !digitalRead(PIN_TX));
@@ -166,7 +167,6 @@ int readBlocking(WiFiClient& wifiClient, uint8_t* buf, size_t size, int16_t time
   return totalBytesRead;
 }
 
-
 void handleSetReceiver() {
   uint8_t data[6];
   readBlocking(client, data, 6, 1000);
@@ -180,6 +180,34 @@ void handleSetReceiver() {
   client.write('k');
 }
 
+void handleSetInterval() {
+  uint8_t data[2];
+  readBlocking(client, data, 2, 1000);
+  auto file = LittleFS.open("/interval", "w+");
+  file.write(data, 2);
+  file.close();
+
+  interval = *((uint16_t*)data);
+
+  client.write('k');
+}
+
+
+void handleConnection() {
+  uint8_t type;
+  readBlocking(client, &type, 1, 1000);
+  switch(type) {
+    case 'r':
+    handleSetReceiver();
+    break;
+    case 'i':
+    handleSetInterval();
+    break;
+    default:
+    client.write('e');
+  }
+}
+
 bool getReceiver(IPAddress& ip, uint16_t& port) {
   File file = LittleFS.open("/receiver", "r");
   if(!file) {
@@ -189,6 +217,16 @@ bool getReceiver(IPAddress& ip, uint16_t& port) {
   file.readBytes(bytes, 6);
   ip = IPAddress(*((uint32_t*)bytes));
   port = *((uint16_t*)(bytes + 4));
+  file.close();
+  return true;
+}
+
+bool getInterval() {
+  File file = LittleFS.open("/interval", "r");
+  if(!file) {
+    return false;
+  }
+  file.readBytes((char*)&interval, 2);
   file.close();
   return true;
 }
@@ -228,7 +266,7 @@ void loop () {
   
     //check wifi client for data
     if (client && client.connected() && client.available()){
-      handleSetReceiver();
+      handleConnection();
       client.stop();
     }
 
@@ -237,7 +275,7 @@ void loop () {
     
     // Every 10 sec, fire off a one-off reading
     unsigned long now = millis();
-    if (now - last > 10000) {
+    if (now - last > interval) {
       reader.enable(true);
       last = now;
     }
