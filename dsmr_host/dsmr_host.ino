@@ -80,6 +80,9 @@ struct __attribute__((packed)) UsageData {
   uint32_t energy_delivered_tariff2;
   uint32_t energy_returned_tariff1;
   uint32_t energy_returned_tariff2;
+  uint32_t voltage_l1;
+  uint32_t voltage_l2;
+  uint32_t voltage_l3;
   uint32_t power_delivered_l1;
   uint32_t power_delivered_l2;
   uint32_t power_delivered_l3;
@@ -87,7 +90,7 @@ struct __attribute__((packed)) UsageData {
   uint32_t gas_timestamp_rest;
   uint32_t gas_delivered;
 };
-static_assert(sizeof(UsageData) == 50, "UsageData size mismatch");
+static_assert(sizeof(UsageData) == 56, "UsageData size mismatch");
 
 // Set up to read from the second serial port, and use D2 as the request
 // pin. On boards with only one (USB) serial port, you can also use
@@ -295,6 +298,9 @@ void loop () {
         ud.power_delivered_l1 = data.power_delivered_l1.int_val();
         ud.power_delivered_l2 = data.power_delivered_l2.int_val();
         ud.power_delivered_l3 = data.power_delivered_l3.int_val();
+        ud.voltage_l1 = data.voltage_l1.int_val();
+        ud.voltage_l2 = data.voltage_l2.int_val();
+        ud.voltage_l3 = data.voltage_l3.int_val();
         convert_timestamp(data.gas2_delivered.timestamp, &ud.gas_timestamp_year, &ud.gas_timestamp_rest);
         ud.gas_delivered = data.gas2_delivered.int_val();
 

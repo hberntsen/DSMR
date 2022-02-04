@@ -45,9 +45,13 @@ pub fn run(data_stream: mpsc::Receiver<UsageData>) {
                             cli.publish(mqtt::Message::new("P1/power_delivered_l3", format!("{}", ud.power_delivered_l3), 0)),
                             cli.publish(mqtt::Message::new("P1/gas_delivered", format!("{}", ud.gas_delivered), 0))
                         )
-                        .join3(
+                        .join5(
                             cli.publish(mqtt::Message::new("P1/energy_delivered_tariff1", format!("{}", ud.energy_delivered_tariff1), 0)),
-                            cli.publish(mqtt::Message::new("P1/energy_delivered_tariff2", format!("{}", ud.energy_delivered_tariff2), 0))
+                            cli.publish(mqtt::Message::new("P1/energy_delivered_tariff2", format!("{}", ud.energy_delivered_tariff2), 0)),
+                            cli.publish(mqtt::Message::new("P1/voltage_l1", format!("{}", ud.voltage_l1), 0)),
+                            cli.publish(mqtt::Message::new("P1/voltage_l2", format!("{}", ud.voltage_l2), 0))
+                        ).join(
+                            cli.publish(mqtt::Message::new("P1/voltage_l3", format!("{}", ud.voltage_l3), 0))
                         )
                         .map(|_| ()).map_err(Error::MqttPublish)
                 })
