@@ -2,7 +2,7 @@
 #include <ESP8266WiFi.h> 
 #include "WiFiManager.h"          //https://github.com/tzapu/WiFiManager which was modded to support upload
 #include <WiFiUdp.h>
-#include "FS.h"
+#include <LittleFS.h>
 
 /**
  * Define the data we're interested in, as well as the datastructure to
@@ -98,6 +98,10 @@ WiFiClient client;
 unsigned long last;
 WiFiUDP udp;
 
+//settings
+static IPAddress receiverIP;
+static uint16_t receiverPort = 0;
+
 void ledToggle() {
   digitalWrite(PIN_TX, !digitalRead(PIN_TX));
 }
@@ -112,14 +116,14 @@ void setup() {
   pinMode(0, INPUT);
   
   if(resetPressed) {
-    SPIFFS.format();
+    LittleFS.format();
     WiFiManager wifiManager;
     wifiManager.startConfigPortal(RESET_SSID, RESET_PASSWORD);
   }
 
-  if(!SPIFFS.begin()) {
-    SPIFFS.format();
-    SPIFFS.begin();
+  if(!LittleFS.begin()) {
+    LittleFS.format();
+    LittleFS.begin();
   }
   
   WiFi.mode(WIFI_STA);
@@ -131,6 +135,8 @@ void setup() {
  
   Serial.begin(115200);
   pinMode(PIN_TX, OUTPUT);
+
+  getReceiver(receiverIP, receiverPort);
 
   server.begin();
   server.setNoDelay(true);
@@ -164,15 +170,18 @@ int readBlocking(WiFiClient& wifiClient, uint8_t* buf, size_t size, int16_t time
 void handleSetReceiver() {
   uint8_t data[6];
   readBlocking(client, data, 6, 1000);
-  auto file = SPIFFS.open("/receiver", "w+");
+  auto file = LittleFS.open("/receiver", "w+");
   file.write(data, 6);
   file.close();
+
+  receiverIP = IPAddress(*((uint32_t*)data));
+  receiverPort = *((uint16_t*)(data + 4));
 
   client.write('k');
 }
 
 bool getReceiver(IPAddress& ip, uint16_t& port) {
-  File file = SPIFFS.open("/receiver", "r");
+  File file = LittleFS.open("/receiver", "r");
   if(!file) {
     return false;
   }
@@ -251,21 +260,11 @@ void loop () {
         convert_timestamp(data.gas2_delivered.timestamp, &ud.gas_timestamp_year, &ud.gas_timestamp_rest);
         ud.gas_delivered = data.gas2_delivered.int_val();
 
-        IPAddress receiverIP;
-        uint16_t receiverPort;
-    
-        if(getReceiver(receiverIP, receiverPort)) {
+        if(receiverPort) {
             udp.beginPacket(receiverIP, receiverPort);
             udp.write((uint8_t*) &ud, sizeof(UsageData));
             udp.endPacket();
         }
-        /*
-        udp.beginPacket(receiverIP2, receiverPort);
-        udp.write((uint8_t*) &ud, sizeof(UsageData));
-        udp.endPacket();
-  */
-  
-        
       } else {
         // Parser error, print error
         //Serial.println(err);
