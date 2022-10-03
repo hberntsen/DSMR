@@ -86,11 +86,14 @@ struct __attribute__((packed)) UsageData {
   uint32_t power_delivered_l1;
   uint32_t power_delivered_l2;
   uint32_t power_delivered_l3;
+  uint32_t power_returned_l1;
+  uint32_t power_returned_l2;
+  uint32_t power_returned_l3;
   uint8_t gas_timestamp_year;
   uint32_t gas_timestamp_rest;
   uint32_t gas_delivered;
 };
-static_assert(sizeof(UsageData) == 56, "UsageData size mismatch");
+static_assert(sizeof(UsageData) == 74, "UsageData size mismatch");
 
 // Set up to read from the second serial port, and use D2 as the request
 // pin. On boards with only one (USB) serial port, you can also use
@@ -100,6 +103,7 @@ WiFiServer server(8000);
 WiFiClient client;
 unsigned long last;
 WiFiUDP udp;
+static uint16_t times_wifi_not_connected = 0;
 
 //settings
 static IPAddress receiverIP;
@@ -111,6 +115,7 @@ void ledToggle() {
 }
 
 void setup() {
+  WiFi.begin();
   WiFi.hostname(RESET_SSID);
   // If we go to reset, do a blocking portal
   pinMode(2, INPUT);  
@@ -252,7 +257,13 @@ void loop () {
   if( WiFi.status() != WL_CONNECTED) {
     ledToggle();
     delay(75);
+    times_wifi_not_connected++;
+    // 5 mins
+    if(times_wifi_not_connected > 4000) {
+      ESP.restart();
+    }
   } else {
+    times_wifi_not_connected = 0;
     //check if there are any new clients
     if (server.hasClient()){
         //free/disclient client
@@ -276,7 +287,7 @@ void loop () {
     // Allow the reader to check the serial buffer regularly
     reader.loop();
     
-    // Every 10 sec, fire off a one-off reading
+    // Every interval, fire off a one-off reading
     unsigned long now = millis();
     if (now - last > interval) {
       reader.enable(true);
@@ -298,6 +309,9 @@ void loop () {
         ud.power_delivered_l1 = data.power_delivered_l1.int_val();
         ud.power_delivered_l2 = data.power_delivered_l2.int_val();
         ud.power_delivered_l3 = data.power_delivered_l3.int_val();
+        ud.power_returned_l1 = data.power_returned_l1.int_val();
+        ud.power_returned_l2 = data.power_returned_l2.int_val();
+        ud.power_returned_l3 = data.power_returned_l3.int_val();        
         ud.voltage_l1 = data.voltage_l1.int_val();
         ud.voltage_l2 = data.voltage_l2.int_val();
         ud.voltage_l3 = data.voltage_l3.int_val();

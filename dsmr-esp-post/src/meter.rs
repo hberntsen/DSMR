@@ -16,6 +16,9 @@ struct UsageDataRaw {
     pub power_delivered_l1: u32,
     pub power_delivered_l2: u32,
     pub power_delivered_l3: u32,
+    pub power_returned_l1: u32,
+    pub power_returned_l2: u32,
+    pub power_returned_l3: u32,
     gas_timestamp_year: u8,
     gas_timestamp_rest: u32,
     pub gas_delivered: u32,
@@ -35,11 +38,14 @@ pub struct UsageData {
     pub power_delivered_l1: u32,
     pub power_delivered_l2: u32,
     pub power_delivered_l3: u32,
+    pub power_returned_l1: u32,
+    pub power_returned_l2: u32,
+    pub power_returned_l3: u32,
     pub gas_timestamp: time::Tm,
     pub gas_delivered: u32,
 }
 
-pub const USAGEDATARAW_SIZE: usize = 62;
+pub const USAGEDATARAW_SIZE: usize = 74;
 
 impl UsageDataRaw {
     fn to_tm(year: u8, rest: u32) -> Result<time::Tm, time::ParseError> {
@@ -80,6 +86,9 @@ impl UsageData {
                 power_delivered_l1: udr.power_delivered_l1,
                 power_delivered_l2: udr.power_delivered_l2,
                 power_delivered_l3: udr.power_delivered_l3,
+                power_returned_l1: udr.power_returned_l1,
+                power_returned_l2: udr.power_returned_l2,
+                power_returned_l3: udr.power_returned_l3,
                 voltage_l1: udr.voltage_l1,
                 voltage_l2: udr.voltage_l2,
                 voltage_l3: udr.voltage_l3,

@@ -43,7 +43,7 @@ fn influx_post(data: String) -> Request<hyper::Body> {
 }
 
 fn influx_energy_data(ud: &UsageData) -> String {
-    format!( "power currently_delivered={},delivered_1={},delivered_2={},currently_phase_l1={},currently_phase_l2={},currently_phase_l3={},voltage_l1={},voltage_l2={},voltage_l3={} {}", ud.power_delivered, ud.energy_delivered_tariff1, ud.energy_delivered_tariff2, ud.power_delivered_l1, ud.power_delivered_l2, ud.power_delivered_l3, ud.voltage_l1, ud.voltage_l2, ud.voltage_l3, ud.power_timestamp.to_utc().to_timespec().sec)
+    format!( "power currently_delivered={},delivered_1={},delivered_2={},currently_phase_l1={},currently_phase_l2={},currently_phase_l3={},voltage_l1={},voltage_l2={},voltage_l3={},currently_returned={},returned_1={},returned_2={},power_returned_l1={},power_returned_l2={},power_returned_l3={} {}", ud.power_delivered, ud.energy_delivered_tariff1, ud.energy_delivered_tariff2, ud.power_delivered_l1, ud.power_delivered_l2, ud.power_delivered_l3, ud.voltage_l1, ud.voltage_l2, ud.voltage_l3, ud.power_returned, ud.energy_returned_tariff1, ud.energy_returned_tariff2, ud.power_returned_l1, ud.power_returned_l2, ud.power_returned_l3, ud.power_timestamp.to_utc().to_timespec().sec)
 }
 
 fn influx_gas_data(ud: &UsageData) -> String {
